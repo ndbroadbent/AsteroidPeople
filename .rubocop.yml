@@ -1,0 +1,178 @@
+AllCops:
+  NewCops: enable
+  Include:
+    - '**/*.rb'
+    - 'Gemfile'
+    - 'Rakefile'
+    - 'lib/tasks/**/*.rake'
+  Exclude:
+    - 'bin/**/*'
+    - 'tmp/**/*'
+    - 'vendor/**/*'
+
+# Bug in RuboCop. See: https://github.com/rubocop-hq/rubocop/issues/6588
+Lint/RedundantCopDisableDirective:
+  Enabled: false
+
+Bundler/OrderedGems:
+  Enabled: false
+
+Layout/ParameterAlignment:
+  EnforcedStyle: with_fixed_indentation
+
+Layout/CaseIndentation:
+  EnforcedStyle: end
+
+Layout/EndAlignment:
+  EnforcedStyleAlignWith: variable
+
+Layout/FirstArrayElementIndentation:
+  EnforcedStyle: consistent
+
+Layout/MultilineMethodCallIndentation:
+  EnforcedStyle: indented
+
+Layout/MultilineOperationIndentation:
+  EnforcedStyle: indented
+
+Layout/SpaceInsideHashLiteralBraces:
+  EnforcedStyle: space
+
+# This seems to break some require lines somehow:
+Layout/EmptyLinesAroundArguments:
+  Enabled: false
+
+Layout/EmptyLineBetweenDefs:
+  AllowAdjacentOneLineDefs: true
+
+Lint/RescueException:
+  Exclude:
+    - 'lib/tasks/*.rake'
+
+Lint/SuppressedException:
+  Enabled: false
+
+# These can be useful to prevent a case being handled by the else
+Lint/EmptyWhen:
+  Enabled: false
+
+# Really annoying. I frequently return from a block
+# when I don't want to run any more code in the method
+Lint/NonLocalExitFromIterator:
+  Enabled: false
+
+Layout/LineLength:
+  Max: 100
+  Exclude:
+    - config/initializers/simple_form_bootstrap.rb
+
+Style/StringLiterals:
+  EnforcedStyle: single_quotes
+
+Style/Documentation:
+  Enabled: false
+
+Style/IfUnlessModifier:
+  Enabled: false
+
+Metrics/AbcSize:
+  Enabled: false
+
+Metrics/ClassLength:
+  Enabled: false
+
+Metrics/CyclomaticComplexity:
+  Enabled: false
+
+Metrics/PerceivedComplexity:
+  Enabled: false
+
+Metrics/MethodLength:
+  Enabled: false
+
+Metrics/ModuleLength:
+  Enabled: false
+
+Metrics/ParameterLists:
+  Enabled: false
+
+Metrics/BlockLength:
+  Enabled: false
+
+Metrics/BlockNesting:
+  Max: 7
+
+Style/DoubleNegation:
+  Enabled: false
+
+Naming/FileName:
+  Exclude: ['Guardfile', 'Gemfile', '**/Gemfile']
+
+Naming/MethodParameterName:
+  Enabled: false
+
+Style/FormatStringToken:
+  EnforcedStyle: annotated
+
+# Disable Style/NumericLiterals so numbers don't need underscores
+Style/NumericLiterals:
+  Enabled: false
+
+Style/NumericPredicate:
+  EnforcedStyle: comparison
+
+Style/RedundantBegin:
+  Enabled: false
+
+# Honestly I don't care about this.
+Style/RegexpLiteral:
+  Enabled: false
+
+Style/SymbolArray:
+  Enabled: false
+
+Style/TrailingCommaInArguments:
+  EnforcedStyleForMultiline: no_comma
+
+Style/TrailingCommaInArrayLiteral:
+  EnforcedStyleForMultiline: consistent_comma
+
+Style/TrailingCommaInHashLiteral:
+  EnforcedStyleForMultiline: consistent_comma
+
+# Allow UTF8 chars in comments.
+Style/AsciiComments:
+  Enabled: false
+
+# Too annoying to require 'english' everywhere.
+Style/SpecialGlobalVars:
+  Enabled: false
+
+Style/BlockDelimiters:
+  Exclude: ['spec/**/*_spec.rb']
+
+Style/HashEachMethods:
+  Enabled: false
+
+Style/HashTransformKeys:
+  Enabled: false
+
+Style/HashTransformValues:
+  Enabled: false
+
+Lint/RaiseException:
+  Enabled: true
+
+Lint/StructNewOverride:
+  Enabled: true
+
+Layout/EmptyLinesAroundAttributeAccessor:
+  Enabled: true
+Layout/SpaceAroundMethodCallOperator:
+  Enabled: true
+Lint/DeprecatedOpenSSLConstant:
+  Enabled: true
+Style/ExponentialNotation:
+  Enabled: true
+Style/SlicingWithRange:
+  Enabled: true
