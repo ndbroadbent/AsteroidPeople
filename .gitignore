@@ -1,2 +1,4 @@
 .bundle
 tmp
+images
+.DS_Store
