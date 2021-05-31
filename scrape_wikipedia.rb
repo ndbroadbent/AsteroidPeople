@@ -8,6 +8,8 @@ require 'yaml'
 require 'csv'
 require 'pry-byebug'
 require 'sucker_punch'
+require 'set'
+require 'anki2'
 
 SKIPPED_CATEGORIES = [
   /Science => Astronomers/,
@@ -58,9 +60,9 @@ def parse_list_el(li_el)
 
   links.each do |wiki_link|
     # Ignore any people who have missing wikipedia pages
-    break if wiki_link.attr(:class) == 'new'
+    break if wiki_link[:class] == 'new'
 
-    path = wiki_link.attr :href
+    path = wiki_link[:href]
     url = if path.start_with?('/')
       "https://en.wikipedia.org#{path}"
     else
@@ -77,6 +79,11 @@ def parse_list_el(li_el)
       puts "#{indentation}Asteroid #{asteroid_number}: #{name} (#{url})"
       next
     end
+
+    # Avoid duplicates
+    next if @asteroid_numbers.include?(asteroid_number)
+
+    @asteroid_numbers << asteroid_number
 
     puts "#{indentation}=> #{name} (#{url})"
 
@@ -101,6 +108,8 @@ output_el = page.css('#mw-content-text .mw-parser-output')
 raise 'Error finding .mw-parser-output' unless output_el.count == 1
 raise 'Error finding .mw-parser-output > *' unless output_el.children.count > 100
 
+# There are some duplicates on the page under multiple categories
+@asteroid_numbers = Set.new
 @people = []
 
 @categories = []
@@ -188,14 +197,14 @@ class DownloadWikipediaPageJob
 
   def find_wiki_image(page)
     img_els = page.css('.infobox.biography .infobox-image img')
-    return img_els.first.attr(:src) if img_els.any?
+    return img_els.first[:src] if img_els.any?
 
     img_els = page.css('.infobox .infobox-image img')
-    return img_els.first.attr(:src) if img_els.any?
+    return img_els.first[:src] if img_els.any?
 
     # Try find a thumbnail
     img_els = page.css('.mw-body-content .thumb img')
-    return img_els.first.attr(:src) if img_els.any?
+    return img_els.first[:src] if img_els.any?
 
     nil
   end
@@ -272,7 +281,22 @@ page_job_instance = DownloadWikipediaPageJob.new
     next unless el.name == 'p'
     next if el.text.strip == ''
 
-    person[:first_paragraph] = el.to_html
+    el.css('sup').remove
+    el.css('span.IPA').remove
+    el.css('i[title="English pronunciation respelling"]').remove
+
+    # Convert relative URLs to absolute
+    el.css('a').each do |link_el|
+      href = link_el[:href]
+      next if href.match?(/^(https?:)?\/\//)
+
+      link_el[:href] = "https://en.wikipedia.org#{href}"
+    end
+
+    html = el.to_html
+    html = html.gsub("\n</p>", '</p>').strip
+
+    person[:first_paragraph] = html
 
     break
   end
@@ -286,38 +310,34 @@ page_job_instance = DownloadWikipediaPageJob.new
   image_name = person_name.gsub(/\W+/, '_').gsub(/_+/, '_')
   image_ext = image_url.split('/').last.split('.').last.downcase
   image_ext = 'jpg' if image_ext == 'jpeg'
-  image_filename = File.expand_path(File.join('images', "#{image_name}.#{image_ext}"), __dir__)
+  image_filename = File.expand_path(
+    File.join('images', "asteroidpeople_#{image_name}.#{image_ext}"), __dir__
+  )
 
   if File.exist?(image_filename)
     person[:image] = image_filename
   end
 end
 
-@people = @people.reject { |p| p[:image].nil? }
+# binding.pry # unless @debugged
+# @debugged = true
+
+@people_with_images = @people.reject { |p| p[:image].nil? }
 
 # Save people to yaml file
 File.open('people.yml', 'w') { |f| f.puts @people.to_yaml }
 
-headers = @people.first.keys
+headers = @people_with_images.first.keys
 CSV.open('people.csv', 'w', { col_sep: "\t" }) do |csv|
   # csv << headers
-  @people[0..3].each do |person|
-  @people.each do |person|
+  # @people_with_images[0..3].each do |person|
+  @people_with_images.each do |person|
     data = headers.map do |h|
       case h
       when :categories
         person[h].join(' - ')
       when :image
-        ['asteroidpeople', person[h].split('/').last].join('_')
-      when :first_paragraph
-        html = person[h].gsub("\n</p>", '</p>').strip
-
-        node = Nokogiri::XML.fragment(html)
-        node.css('sup').remove
-        node.css('span.IPA').remove
-        node.css('i[title="English pronunciation respelling"]').remove
-
-        node.to_html
+        person[h].split('/').last
       else
         person[h]
       end
@@ -326,7 +346,215 @@ CSV.open('people.csv', 'w', { col_sep: "\t" }) do |csv|
   end
 end
 
-binding.pry unless @debugged
+binding.pry # unless @debugged
 @debugged = true
 
-true
+# Create Anki deck file
+ANKI_CSS = <<~CSS
+      .card {
+        font-family: arial;
+        font-size: 20px;
+        text-align: center;
+        color: black;
+        background-color: white;
+      }
+  #{'  '}
+      hr {
+        margin: 22px;
+      }
+  #{'  '}
+      small.asteroid {
+        font-size: 14px;
+      }
+  #{'  '}
+      .description {
+        text-align: left;
+        font-size: 16px;
+        line-height: 21px;
+        max-width: 450px;
+        margin: auto;
+        margin-top: 25px
+      }
+  #{'  '}
+      .profile {
+        margin: auto;
+      }
+      .profile img {
+        max-width: 300px;
+        max-height: 300px;
+      }
+  #{'  '}
+      .categories {
+        font-size: 12px;
+        color: #777;
+        margin-top: 10px;
+      }
+    }
+CSS
+
+ANKI_NAME_ABOUT_FRONT = <<~HTML
+    <a href="{{URL}}">{{Name}}</a> <small class="asteroid">(<a href="{{Asteroid URL}}">{{Asteroid Name}}</a>)</small>
+  #{'  '}
+    <hr>
+  #{'  '}
+    ?
+HTML
+
+ANKI_NAME_ABOUT_BACK = <<~HTML
+    <a href="{{URL}}">{{Name}}</a> <small class="asteroid">(<a href="{{Asteroid URL}}">{{Asteroid Name}}</a>)</small>
+  #{'  '}
+    <div class="categories">{{Categories}}</div>
+  #{'  '}
+    <hr>
+  #{'  '}
+    <div class="profile">{{Image}}</div>
+  #{'  '}
+    <div class="description">
+    {{First Paragraph}}
+    </div>
+HTML
+
+ANKI_PICTURE_NAME_FRONT = <<~HTML
+    <div class="profile">{{Image}}</div>
+  #{'  '}
+    <hr>
+  #{'  '}
+    ?
+HTML
+
+ANKI_PICTURE_NAME_BACK = <<~HTML
+    <div class="profile">{{Image}}</div>
+  #{'  '}
+    <hr>
+  #{'  '}
+    <a href="{{URL}}">{{Name}}</a> <small class="asteroid">(<a href="{{Asteroid URL}}">{{Asteroid Name}}</a>)</small>
+  #{'  '}
+    <div class="categories">{{Categories}}</div>
+    <hr>
+  #{'  '}
+    <div class="description">
+    {{First Paragraph}}
+    </div>
+HTML
+
+DEFAULT_FIELD = {
+  'rtl' => false,
+  'sticky' => false,
+  'media' => [],
+  'ord' => 0,
+  'font' => 'Arial',
+  'size' => 12,
+}.freeze
+
+ANKI_MODEL = {
+  'name' => 'AsteroidPeople-1234',
+  'flds' => [
+    DEFAULT_FIELD.dup.merge('ord' => 0, 'name' => 'Name'),
+    DEFAULT_FIELD.dup.merge('ord' => 1, 'name' => 'URL'),
+    DEFAULT_FIELD.dup.merge('ord' => 2, 'name' => 'Asteroid Number'),
+    DEFAULT_FIELD.dup.merge('ord' => 3, 'name' => 'Asteroid Name'),
+    DEFAULT_FIELD.dup.merge('ord' => 4, 'name' => 'Asteroid URL'),
+    DEFAULT_FIELD.dup.merge('ord' => 5, 'name' => 'Asteroid Categories'),
+    DEFAULT_FIELD.dup.merge('ord' => 6, 'name' => 'First Paragraph'),
+    DEFAULT_FIELD.dup.merge('ord' => 7, 'name' => 'Image'),
+  ],
+  'css' => ANKI_CSS,
+  'tmpls' => [
+    {
+      'name' => 'Name -> About',
+      'qfmt' => ANKI_NAME_ABOUT_FRONT,
+      'did' => nil,
+      'bafmt' => '',
+      'afmt' => ANKI_NAME_ABOUT_BACK,
+      'ord' => 0,
+      'bqfmt' => '',
+    },
+    {
+      'name' => 'Picture -> Name',
+      'qfmt' => ANKI_PICTURE_NAME_FRONT,
+      'did' => nil,
+      'bafmt' => '',
+      'afmt' => ANKI_PICTURE_NAME_BACK,
+      'ord' => 1,
+      'bqfmt' => '',
+    },
+  ],
+}
+class Anki2
+  def default_model
+    ANKI_MODEL
+  end
+
+  attr_accessor :db, :top_deck_id, :top_model_id
+end
+
+def checksum(str)
+  Digest::SHA1.hexdigest(str)[0...8].to_i(16)
+end
+
+def strip_html(str)
+  str # TODO?
+end
+
+def add_card(person)
+  fields = [
+    person[:name],
+    person[:url],
+    person[:asteroid_number],
+    person[:asteroid_name],
+    person[:asteroid_url],
+    person[:categories].join(', '),
+    person[:first_paragraph],
+    person[:image].split('/').last,
+  ]
+
+  deck_id = @anki.top_deck_id
+  note_id = rand(10**13)
+
+  # Build list of tags
+  tags = person[:categories].map do |t|
+    ['AP', t.tr(' ', '_').gsub(/\W/, '_').gsub(/_+/, '_')].join('::')
+  end.join(' ')
+
+  note_guid = rand(10**10).to_s(36)
+  modified_time = Time.now.to_i
+
+  note_content = fields.join(Anki2::SEPARATOR)
+
+  @anki.db.execute 'insert into notes values(?,?,?,?,?,?,?,?,?,?,?)',
+                   note_id,
+                   note_guid,
+                   @anki.top_model_id,
+                   modified_time, -1,
+                   tags,
+                   note_content,
+                   strip_html(fields.first),
+                   checksum(strip_html(note_content)),
+                   0, ''
+  card_id = rand(10**13)
+  @anki.db.execute 'insert into cards values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                   card_id,
+                   note_id,
+                   deck_id,
+                   0,
+                   modified_time,
+                   -1, 0, 0, 179, 0, 0, 0, 0, 0, 0, 0, 0, ''
+end
+
+@anki = Anki2.new(model: ANKI_MODEL, output_path: 'AsteroidPeople.apkg', name: 'AsteroidPeople')
+@anki.add_media('images')
+
+# @people_with_images.each do |person|
+add_card(person)
+# end
+
+# Save sqlite db to disk so we can inspect in DB Browser for SQLite
+backup_db = SQLite3::Database.new('ankibackup.sqlite3')
+sqlite_backup = SQLite3::Backup.new(backup_db, 'main', @anki.db, 'main')
+sqlite_backup.step(-1)
+sqlite_backup.finish
+
+@anki.save
+
+binding.pry # unless @debugged
+@debugged = true
