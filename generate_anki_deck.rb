@@ -37,7 +37,7 @@ class Anki2
     @db = SQLite3::Database.open(File.join(@tmpdir, 'collection.anki2'))
     @db.execute_batch File.read(@options[:template_sql_path])
 
-    @top_deck_id = rand(10**13)
+    @top_deck_id = 6771564019408 # rand(10**13)
     decks  = @db.execute('select decks from col')
     decks  = JSON.parse(decks.first.first) # .gsub('\"', '"')
     decks.delete('1') # Delete default deck from template
@@ -47,7 +47,7 @@ class Anki2
     decks[@top_deck_id.to_s] = deck
     @db.execute('update col set decks=? where id=1', decks.to_json)
 
-    @top_model_id = rand(10**13)
+    @top_model_id = 1178095728650 # rand(10**13)
     models = @db.execute('select models from col')
     models = JSON.parse(models.first.first) # .gsub('\"', '"')
 
@@ -71,6 +71,11 @@ end
 
 @card_due = 0
 
+# Generate idempotent ids that can be reimported after updates
+@note_id = 1632278802000
+@card_id = 1632285802000
+@note_guid_i = 2893482027
+
 def add_card(person)
   fields = [
     person[:name],
@@ -84,14 +89,12 @@ def add_card(person)
   ]
 
   deck_id = @anki.top_deck_id
-  note_id = rand(10**13)
 
   # Build list of tags
   tags = person[:categories].map do |t|
     ['AP', t.tr(' ', '_').gsub(/\W/, '_').gsub(/_+/, '_')].join('::')
   end.join(' ')
 
-  note_guid = rand(10**10).to_s(36)
   modified_time = Time.now.to_i
 
   note_content = fields.join(Anki2::SEPARATOR)
@@ -101,8 +104,8 @@ def add_card(person)
   @anki.db.execute 'insert into notes
     (id,guid,mid,mod,usn,tags,flds,sfld,csum,flags,data)
     values (?,?,?,?,?,?,?,?,?,?,?)',
-                   note_id,
-                   note_guid,
+                   @note_id,
+                   @note_guid_i.to_s(36),
                    @anki.top_model_id,
                    modified_time, 0,
                    tags,
@@ -114,32 +117,35 @@ def add_card(person)
   # Example card:
   # 1622288802593,1622288802433,1622285981071,0,1622425042,-1,0,0,1,0,0,0,0,1001,0,0,0,
   # Add name -> details card (type 0)
-  card1_id = rand(10**13)
   card_type = 0
   @anki.db.execute 'insert into cards
     (id,nid,did,ord,mod,usn,type,queue,due,ivl,factor,reps,lapses,left,odue,odid,flags,data)
     values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                   card1_id,
-                   note_id,
+                   @card_id,
+                   @note_id,
                    deck_id,
                    card_type,
                    modified_time,
                    -1, 0, 0, @card_due, 0, 0, 0, 0, 0, 0, 0, 0, ''
+  @card_id += 1
   @card_due += 1
 
   # Add picture -> name card (type 1)
-  card2_id = rand(10**13)
   card_type = 1
   @anki.db.execute 'insert into cards
     (id,nid,did,ord,mod,usn,type,queue,due,ivl,factor,reps,lapses,left,odue,odid,flags,data)
     values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                   card2_id,
-                   note_id,
+                   @card_id,
+                   @note_id,
                    deck_id,
                    card_type,
                    modified_time,
                    -1, 0, 0, @card_due, 0, 0, 0, 0, 0, 0, 0, 0, ''
+  @card_id += 1
   @card_due += 1
+
+  @note_id += 1
+  @note_guid_i += 1
 end
 
 @anki = Anki2.new(
