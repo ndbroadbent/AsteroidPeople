@@ -113,9 +113,13 @@ raise 'Error finding .mw-parser-output > *' unless output_el.children.count > 10
 @people = []
 
 @categories = []
-last_category_tag = nil
 
 last_category_string = nil
+
+main_category = nil
+sub_category = nil
+sub_sub_category = nil
+
 output_el.children.each do |el|
   # Build up the nested list of categories
 
@@ -126,22 +130,22 @@ output_el.children.each do |el|
     # Stop once we get to the "See also" section
     break if category == 'See also'
 
-    # @categories.pop if %w[h4 h3].include?(last_category_tag)
-    # @categories.pop if last_category_tag == 'h3'
     case el.name
     when 'h2'
       # Reset (top level category)
       @categories = []
+      main_category = category
+      sub_category = nil
+      sub_sub_category = nil
     when 'h3'
-      @categories.pop if %w[h3 h4].include?(last_category_tag)
-      @categories.pop if last_category_tag == 'h4'
+      sub_category = category
+      sub_sub_category = nil
     when 'h4'
-      @categories.pop if last_category_tag == 'h4'
+      sub_sub_category = category
     end
-    @categories << category
-    last_category_tag = el.name
   end
 
+  @categories = [main_category, sub_category, sub_sub_category].reject(&:nil?)
   category_string = @categories.join(' => ')
 
   # Skip anyone we don't need to know about
